@@ -111,3 +111,9 @@ Group 7 — SC453 Quantitative Financial Analysis.
 ## Disclaimer
 
 This project is intended for academic and educational purposes only. It is not financial advice and should not be used as the sole basis for investment decisions.
+
+## Project Website
+
+The [`website/`](website/) folder holds an interactive page that presents the project's results: price paths, risk measures, volatility, portfolio optimization and factor exposures. Open `website/index.html` in a browser to view it.
+
+The website was designed and built by **Kavya Parmar**. The rest of the group's involvement was limited to the original project notebook submitted for SC453. See [`website/README.md`](website/README.md) for details.
