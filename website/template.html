@@ -1,0 +1,715 @@
+<title>PSU Bank Ledger</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single scrolling research ledger. Sticky section index on top, each analysis is a numbered chapter (the notebook's real order), charts sit on raised sheets. */
+:root{
+  --bg:#f3ecdc; --sheet:#fbf7ee; --ink:#2c2a1f; --ink-2:#635d4c; --ink-3:#958d78;
+  --rule:#e4dac5; --axis:#cbbfa4; --accent:#3f8a4c; --accent-wash:#e2eed8;
+  --s1:#5aa865; --s2:#c4965a; --s3:#b86b7a; --muted-line:#d6ccb4;
+  --seq-lo:#f0e9d6; --seq-hi:#4e9659; --neg:#c0573f; --neg-lo:#f6e1d4;
+  --good:#3f8a4c; --bad:#b04a34;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1d1c16; --sheet:#26251d; --ink:#efe8d8; --ink-2:#bdb49e; --ink-3:#8a826d;
+  --rule:#37352b; --axis:#4d4a3c; --accent:#a3d69c; --accent-wash:#2d3626;
+  --s1:#8fd18c; --s2:#dcb67e; --s3:#dc97a6; --muted-line:#47453a;
+  --seq-lo:#2b2a21; --seq-hi:#8fd18c; --neg:#e88468; --neg-lo:#3a2620;
+  --good:#9fd99a; --bad:#f09a82; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1d1c16; --sheet:#26251d; --ink:#efe8d8; --ink-2:#bdb49e; --ink-3:#8a826d;
+  --rule:#37352b; --axis:#4d4a3c; --accent:#a3d69c; --accent-wash:#2d3626;
+  --s1:#8fd18c; --s2:#dcb67e; --s3:#dc97a6; --muted-line:#47453a;
+  --seq-lo:#2b2a21; --seq-hi:#8fd18c; --neg:#e88468; --neg-lo:#3a2620;
+  --good:#9fd99a; --bad:#f09a82; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(2.1rem,5.2vw,3.6rem);line-height:1.04;font-weight:800}
+h2{font-size:clamp(1.5rem,3vw,2rem);line-height:1.15;font-weight:700}
+h3{font-size:1.05rem;font-weight:700}
+p{margin:0;max-width:68ch}
+.mono,.tick,td.num,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:500 .72rem/1 var(--f-mono);text-transform:uppercase;letter-spacing:.12em;color:var(--ink-3)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* sticky index */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.index{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+.index .wrap{display:flex;gap:4px;align-items:center;overflow-x:auto;scrollbar-width:none;padding-block:8px}
+.index .wrap::-webkit-scrollbar{display:none}
+.index .brand{font:700 .95rem var(--f-display);margin-right:12px;white-space:nowrap;color:var(--ink)}
+.index a{font:500 .8rem var(--f-body);color:var(--ink-2);text-decoration:none;padding:6px 10px;border-radius:6px;white-space:nowrap}
+.index a:hover{background:var(--accent-wash);color:var(--ink)}
+.index a.on{color:var(--accent);background:var(--accent-wash)}
+
+/* hero */
+.hero .wrap{padding-block:56px 32px;display:grid;gap:28px}
+.hero .lede{font-size:1.1rem;color:var(--ink-2);max-width:62ch}
+.tape{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--ink);border-bottom:1px solid var(--rule)}
+.tape>div{padding:14px 16px 16px 0;display:grid;gap:6px;min-width:0}
+.tape>div+div{padding-left:16px;border-left:1px solid var(--rule)}
+.tape .v{font:700 clamp(1.5rem,3vw,2.1rem)/1 var(--f-display)}
+.tape .k{font-size:.82rem;color:var(--ink-2)}
+@media (max-width:720px){.tape{grid-template-columns:repeat(2,minmax(0,1fr))}.tape>div:nth-child(3){padding-left:0;border-left:0}.tape>div:nth-child(n+3){border-top:1px solid var(--rule)}}
+
+/* chapters */
+section.ch{padding-block:48px 8px;scroll-margin-top:56px}
+.ch-head{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:baseline;margin-bottom:20px}
+.ch-num{font:500 .85rem var(--f-mono);color:var(--accent);grid-row:span 2}
+.ch-head p{color:var(--ink-2);grid-column:2}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:20px;min-width:0}
+.sheet+.sheet,.grid2+.sheet,.sheet+.grid2{margin-top:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid2.wide-l{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+@media (max-width:860px){.grid2,.grid2.wide-l{grid-template-columns:minmax(0,1fr)}}
+.sheet-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px 16px;margin-bottom:12px}
+.sheet-head .t{display:grid;gap:2px;min-width:0}
+.sub{font-size:.82rem;color:var(--ink-2)}
+.notes{display:grid;gap:10px;margin-top:4px}
+.notes li{color:var(--ink-2);max-width:68ch}
+.notes li b{color:var(--ink);font-weight:600}
+ul.notes{padding-left:18px;margin:0}
+
+/* controls */
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;padding:2px;background:var(--bg);flex-wrap:wrap}
+.seg button{font:500 .78rem var(--f-body);color:var(--ink-2);background:none;border:0;padding:6px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--sheet);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{font:500 .74rem var(--f-mono);border:1px solid var(--rule);background:var(--sheet);color:var(--ink-2);border-radius:999px;padding:4px 10px 4px 8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--muted-line);display:inline-block}
+.chip[aria-pressed="true"]{color:var(--ink);border-color:var(--ink-3)}
+
+/* charts */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--ink-2);font:11px var(--f-mono)}
+.grid line{stroke:var(--rule);stroke-width:1}
+.baseline{stroke:var(--axis);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.8rem;color:var(--ink-2);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.legend i.dot{width:9px;height:9px;border-radius:50%}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--ink-3) 0 4px,transparent 4px 7px)!important}
+.tip{position:absolute;pointer-events:none;background:var(--sheet);border:1px solid var(--rule);box-shadow:0 6px 20px rgba(0,0,0,.14);border-radius:8px;padding:8px 10px;font:12px/1.45 var(--f-body);color:var(--ink);min-width:140px;z-index:5;white-space:nowrap}
+.tip .h{font:500 11px var(--f-mono);color:var(--ink-3);margin-bottom:4px}
+.tip .r{display:flex;justify-content:space-between;gap:14px;align-items:center}
+.tip .r span:first-child{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.tip .r b{font:500 12px var(--f-mono);color:var(--ink)}
+.tip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin-inline:-4px;padding-inline:4px}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th{font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);text-align:left;padding:8px 10px;border-bottom:1px solid var(--axis);white-space:nowrap}
+th.num,td.num{text-align:right}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th button{all:unset;cursor:pointer}
+th button:focus-visible{outline:2px solid var(--accent)}
+th[aria-sort] button::after{content:" ↕";color:var(--ink-3)}
+th[aria-sort="descending"] button::after{content:" ↓";color:var(--accent)}
+th[aria-sort="ascending"] button::after{content:" ↑";color:var(--accent)}
+.tk{font:500 .8rem var(--f-mono)}
+.nm{color:var(--ink-2);font-size:.8rem}
+.up{color:var(--good)} .dn{color:var(--bad)}
+.inbar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.inbar i{display:inline-block;height:6px;border-radius:3px;background:var(--s1);opacity:.75}
+.heat td.c{text-align:center;font:500 .74rem var(--f-mono);padding:7px 4px;border:2px solid var(--sheet)}
+.heat th{text-align:center;padding:6px 4px}
+.heat th.rowh{text-align:left}
+
+/* weights */
+.wlist{display:grid;gap:4px}
+.wrow{display:grid;grid-template-columns:96px 1fr 64px;align-items:center;gap:10px;font-size:.8rem}
+.wrow .bar{position:relative;height:16px}
+.wrow .bar .zero{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--axis)}
+.wrow .bar b{position:absolute;top:2px;height:12px;border-radius:3px;transition:left .3s,width .3s}
+.wrow .val{text-align:right}
+@media (prefers-reduced-motion:reduce){.wrow .bar b{transition:none}}
+
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kv>div{border-top:1px solid var(--rule);padding-top:8px;display:grid;gap:2px}
+.kv .v{font:600 1.15rem var(--f-mono)}
+.kv .k{font-size:.78rem;color:var(--ink-2)}
+@media (max-width:520px){.kv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.findings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 32px;counter-reset:f}
+.findings div{padding:16px 0;border-top:1px solid var(--rule);display:grid;gap:6px}
+.findings h3{font-size:1rem}
+.findings p{color:var(--ink-2);font-size:.92rem}
+@media (max-width:760px){.findings{grid-template-columns:minmax(0,1fr)}}
+footer .wrap{padding-block:40px 56px;display:grid;gap:14px;color:var(--ink-2);font-size:.85rem;border-top:1px solid var(--rule);margin-top:48px}
+.team{display:flex;flex-wrap:wrap;gap:6px 18px}
+.team span{white-space:nowrap}
+details.tableview{margin-top:12px;font-size:.82rem}
+details.tableview summary{cursor:pointer;color:var(--accent);font-weight:500}
+details.tableview[open] summary{margin-bottom:8px}
+</style>
+
+<nav class="index" aria-label="Sections"><div class="wrap">
+  <span class="brand">PSU Bank Ledger</span>
+  <a href="#prices">Prices</a><a href="#universe">Universe</a><a href="#risk">VaR &amp; ES</a><a href="#stress">Stress test</a><a href="#volatility">Volatility</a><a href="#portfolio">Portfolio</a><a href="#factors">Factors</a><a href="#findings">Findings</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">SC453 · NIFTY PSU Bank · 1 Jan 2020 – 30 Dec 2025</div>
+  <h1>Twelve state-owned banks, six years, one sector that rewrote its risk profile.</h1>
+  <p class="lede">We downloaded daily adjusted prices for every current constituent of the NIFTY PSU Bank index and measured downside risk, volatility dynamics, optimal portfolios and factor exposures. Every figure here is reproduced from our project notebook.</p>
+  <div class="tape" id="tape"></div>
+</div></header>
+
+<main>
+<section class="ch" id="prices"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§1</span><h2>What ₹100 became</h2><p>Adjusted close (dividends and splits included), rebased to 100 on 1 Jan 2020 and plotted on a log scale so equal vertical distances mean equal percentage moves. Pick up to three banks to highlight.</p></div>
+  <div class="sheet">
+    <div class="chips" id="priceChips" role="group" aria-label="Highlight banks"></div>
+    <div class="chart" id="priceChart"></div>
+    <div class="legend" id="priceLegend"></div>
+  </div>
+</div></section>
+
+<section class="ch" id="universe"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§2</span><h2>The universe at a glance</h2><p>1,485 daily simple returns per bank, with no missing or invalid prices after cleaning. Click a column to sort.</p></div>
+  <div class="sheet"><div class="tbl-wrap"><table id="uniTable"></table></div></div>
+  <div class="grid2">
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Return correlation</h3><span class="sub">Daily returns, full sample. Darker cells move together more.</span></div></div>
+      <div class="tbl-wrap"><table class="heat" id="corrTable"></table></div>
+    </div>
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Calendar-year returns</h3><span class="sub">2020 is from 1 Jan; 2025 ends 30 Dec.</span></div></div>
+      <div class="tbl-wrap"><table class="heat" id="yearTable"></table></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="ch" id="risk"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§3</span><h2>Value at Risk and Expected Shortfall</h2><p>One-day losses for our two risk stocks: <b>SBIN</b>, the sector's large anchor, and <b>UNIONBANK</b>. VaR is the loss not exceeded on 95 or 99 days in 100; ES is the average loss on the days that do exceed it.</p></div>
+  <div class="grid2 wide-l">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="t"><h3>Loss thresholds by measure</h3><span class="sub" id="riskSub"></span></div>
+        <div class="controls">
+          <div class="seg" id="riskPeriod" role="group" aria-label="Sample period"></div>
+          <div class="seg" id="riskMethod" role="group" aria-label="Method"></div>
+        </div>
+      </div>
+      <div class="chart" id="riskChart"></div>
+      <div class="legend"><span><i class="dot" style="background:var(--s1)"></i>SBIN</span><span><i class="dot" style="background:var(--s2)"></i>UNIONBANK</span></div>
+      <details class="tableview"><summary>Show every period and method as a table</summary><div class="tbl-wrap"><table id="riskTable"></table></div></details>
+    </div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="t"><h3>Where the tail starts</h3><span class="sub">Daily returns, 2020–2025, with fitted Student's t</span></div>
+        <div class="seg" id="histStock" role="group" aria-label="Stock"></div>
+      </div>
+      <div class="chart" id="histChart"></div>
+      <div class="kv" id="histKv" style="margin-top:12px"></div>
+    </div>
+  </div>
+  <div class="sheet">
+    <ul class="notes">
+      <li><b>UNIONBANK is riskier on every measure and in every period.</b> Full-sample historical 99% VaR is 7.17% against SBIN's 5.41%.</li>
+      <li><b>99% VaR is roughly double 95% VaR</b> for both stocks, a direct sign of fat tails. The fitted t has only about 3 degrees of freedom.</li>
+      <li><b>Risk fell sharply after 2022.</b> SBIN's 95% VaR dropped from 3.65% (2020–22, which holds the COVID crash) to 2.00% (2023–25).</li>
+      <li><b>An assumed-df=5 parametric t is the most conservative</b> (SBIN 99% VaR 6.49%), because it uses the sample standard deviation as its scale. We rely on the historical and fitted-t estimates.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section class="ch" id="stress"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§4</span><h2>March 2020 stress test</h2><p>We added the 21 trading days of March 2020 to the calm 2023–2025 sample, about 3% more observations, and re-ran every measure.</p></div>
+  <div class="grid2">
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Change from adding one crisis month</h3><span class="sub">2023–25 → 2023–25 + Mar 2020, historical method</span></div></div>
+      <div class="chart" id="stressChart"></div>
+      <div class="legend"><span><i class="dot" style="background:var(--s1)"></i>SBIN</span><span><i class="dot" style="background:var(--s2)"></i>UNIONBANK</span></div>
+    </div>
+    <div class="sheet">
+      <ul class="notes">
+        <li><b>The 95% level barely moves.</b> SBIN 95% VaR rises 9%, from 2.00% to 2.18%. Ordinary bad days are unchanged.</li>
+        <li><b>The 99% tail reacts strongly.</b> SBIN 99% VaR rises 44% (3.54% → 5.09%) and 99% ES rises 62% (5.56% → 8.99%).</li>
+        <li><b>UNIONBANK moves less in the historical method</b> (+22% on 99% ES) because its tail was already fat, but its fitted-t 99% ES jumps 66%, from 7.60% to 12.64%.</li>
+        <li><b>The lesson:</b> three calm years can hide how bad a single month gets. Tail measures need crisis data in the sample, or a stress overlay.</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section class="ch" id="volatility"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§5</span><h2>Volatility that remembers</h2><p>EWMA variance, σ²<sub>t</sub> = λσ²<sub>t−1</sub> + (1−λ)r²<sub>t−1</sub>, with λ estimated by maximum likelihood under Student's t errors, compared with an equal-weight rolling window sized to cover 90% of EWMA's weight.</p></div>
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="t"><h3>Annualised conditional volatility</h3><span class="sub" id="volSub"></span></div>
+      <div class="seg" id="volStock" role="group" aria-label="Stock"></div>
+    </div>
+    <div class="chart" id="volChart"></div>
+    <div class="legend" id="volLegend"></div>
+  </div>
+  <div class="grid2">
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Does EWMA forecast tomorrow?</h3><span class="sub">OLS of r²<sub>t+1</sub> on σ̂²<sub>t</sub>. A perfect forecast has α = 0 and η = 1.</span></div></div>
+      <div class="tbl-wrap"><table id="regTable"></table></div>
+    </div>
+    <div class="sheet">
+      <ul class="notes">
+        <li><b>SBIN's volatility is persistent</b> (λ = 0.978, half-life ≈ 31 trading days). UNIONBANK's reacts to shocks within days (λ = 0.928, half-life ≈ 9).</li>
+        <li><b>Neither matches the RiskMetrics default of 0.94,</b> so one fixed λ would not suit both banks.</li>
+        <li><b>η is significant for both,</b> so EWMA carries real information. SBIN is close to unbiased; UNIONBANK's η of 0.44 shows its forecasts overshoot.</li>
+        <li><b>EWMA edges the rolling window</b> on RMSE for both stocks, by a margin too small to call it clearly better.</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section class="ch" id="portfolio"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§6</span><h2>Building the quietest portfolio</h2><p>Mean-variance optimisation across all 12 banks, using annualised historical means and four covariance estimators, with and without short selling.</p></div>
+  <div class="grid2">
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Efficient frontier, long only</h3><span class="sub">Sample covariance. Hover the curve to see the weights.</span></div></div>
+      <div class="chart" id="frontChart"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Efficient frontier</span><span><i class="dot" style="background:var(--ink-3)"></i>Single bank</span><span><i class="dot" style="background:var(--s2)"></i>Minimum variance</span></div>
+    </div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="t"><h3>Minimum-variance weights</h3><span class="sub" id="wSub"></span></div>
+        <div class="controls">
+          <div class="seg" id="wCov" role="group" aria-label="Covariance estimator"></div>
+          <div class="seg" id="wShort" role="group" aria-label="Short selling"></div>
+        </div>
+      </div>
+      <div class="wlist" id="wList"></div>
+      <div class="kv" id="wKv" style="margin-top:14px"></div>
+    </div>
+  </div>
+  <div class="sheet">
+    <ul class="notes">
+      <li><b>SBIN anchors every solution,</b> from 66% (Ledoit-Wolf, long only) to 99% (EWMA, shorts allowed), because it has the lowest standalone volatility at 31%.</li>
+      <li><b>Long-only gives corner solutions.</b> Five banks get zero weight under sample covariance: BANKBARODA, CANBK, CENTRALBK, IOB and PSB.</li>
+      <li><b>Allowing shorts trims volatility only slightly,</b> from 29.26% to 28.95% under sample covariance, by shorting CANBK (−14.9%) and BANKBARODA (−6.8%). Borrow costs on PSU names would likely erase that gain.</li>
+      <li><b>EWMA covariance reports far lower risk (16.2%)</b> because it weights the calmer recent years. Shrinkage and OAS barely differ from the sample estimate.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section class="ch" id="factors"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§7</span><h2>What drives the returns</h2><p>Carhart four-factor regressions on excess returns, using the IIM Ahmedabad Indian factor library (market, size SMB, value HML, momentum WML), and CAPM betas estimated separately for each half of the sample.</p></div>
+  <div class="grid2">
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>Four-factor betas, 2020–2025</h3><span class="sub">Blue is positive exposure, red is negative.</span></div></div>
+      <div class="tbl-wrap"><table class="heat" id="betaTable"></table></div>
+    </div>
+    <div class="sheet">
+      <div class="sheet-head"><div class="t"><h3>CAPM beta, then and now</h3><span class="sub">2020–22 → 2023–25, sorted by change</span></div></div>
+      <div class="chart" id="capmChart"></div>
+      <div class="legend"><span><i class="dot" style="background:var(--ink-3)"></i>2020–2022</span><span><i class="dot" style="background:var(--s1)"></i>2023–2025</span></div>
+    </div>
+  </div>
+  <div class="sheet">
+    <ul class="notes">
+      <li><b>Every bank loads heavily on value</b> (HML 0.50–0.98), and smaller banks such as IOB, CENTRALBK and MAHABANK also carry strong size exposure (SMB ≈ 0.9).</li>
+      <li><b>SBIN behaves like a large cap:</b> its size beta is the only negative one (−0.08) and its value beta is the lowest (0.50).</li>
+      <li><b>Momentum exposure is mostly negative,</b> so these stocks tended to lag when recent winners kept winning.</li>
+      <li><b>Market sensitivity rose for most banks after 2022.</b> PSB, CENTRALBK and UCOBANK added almost a full point of beta. SBIN, INDIANB and CANBK became slightly less sensitive.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section class="ch" id="findings"><div class="wrap">
+  <div class="ch-head"><span class="ch-num">§8</span><h2>Key findings</h2><p>What we would tell a risk manager or an allocator looking at this sector.</p></div>
+  <div class="findings">
+    <div><h3>SBIN is the sector's stabiliser</h3><p>Lowest volatility (31% annualised), lowest VaR and ES, and the largest weight in every minimum-variance portfolio.</p></div>
+    <div><h3>Tail risk hides in calm samples</h3><p>Adding March 2020 to 2023–25 raised SBIN's 99% ES by 62% while its 95% VaR moved only 9%.</p></div>
+    <div><h3>Volatility memory differs by bank</h3><p>SBIN's λ of 0.978 gives a 31-day half-life; UNIONBANK's 0.928 gives 9 days. A single RiskMetrics λ fits neither.</p></div>
+    <div><h3>Diversification inside the sector is thin</h3><p>Pairwise correlations run from about 0.4 to 0.8, so the long-only minimum-variance portfolio still carries 29% volatility.</p></div>
+    <div><h3>Short selling buys very little</h3><p>Shorting cuts minimum-variance volatility by about 0.3 points, small enough that borrow costs and squeeze risk outweigh it.</p></div>
+    <div><h3>These are value stocks with rising beta</h3><p>Strong HML loadings throughout, and market betas that rose for nine of the twelve banks between the two sub-periods.</p></div>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div class="eyebrow">SC453 Quantitative Financial Analysis</div>
+  <p>This website was designed and built by <b style="color:var(--ink)">Kavya Parmar</b>.</p>
+  <p>The original project notebook, the SC453 group submission this site draws on, was prepared by the group members below. Their involvement is limited to that notebook; they did not work on this website.</p>
+  <div class="team">
+    <span>Kavya Parmar</span><span>Yogesh Bagotia</span><span>Sanya Vaishnavi</span><span>Dev Makhwana</span><span>Zeel Parmar</span><span>Shreyas Dutta</span><span>Vraj Patel</span><span>Pratik Chauhan</span><span>Soham Mevada</span>
+  </div>
+  <p>Prices: Yahoo Finance adjusted close via <span class="mono">yfinance</span>. Factors: IIM Ahmedabad Indian Fama-French data library (Dec 2025 release, survivorship-bias adjusted). Tools: pandas, SciPy, arch, statsmodels, PyPortfolioOpt. Past results describe the sample period and do not predict future returns.</p>
+</div></footer>
+
+<script>
+const D = /*DATA*/null;
+
+// ---------- results from the project notebook ----------
+const RISK = { // [VaR95, VaR99, ES95, ES99]
+  full:{label:"2020–25", hist:{SBIN:[.02893,.05408,.04604,.07781],UNIONBANK:[.03453,.07170,.05588,.09456]}, t:{SBIN:[.02767,.05378,.04573,.08252],UNIONBANK:[.03947,.07210,.06150,.10453]}},
+  p1:{label:"2020–22", hist:{SBIN:[.03650,.06208,.05472,.08359],UNIONBANK:[.03916,.07919,.06286,.09828]}, t:{SBIN:[.03400,.06217,.05286,.08912],UNIONBANK:[.04460,.08578,.07326,.13229]}},
+  p2:{label:"2023–25", hist:{SBIN:[.02001,.03542,.03183,.05562],UNIONBANK:[.03039,.05851,.04720,.07933]}, t:{SBIN:[.02072,.03810,.03241,.05512],UNIONBANK:[.03426,.05749,.04930,.07603]}},
+  stress:{label:"23–25 + Mar 20", hist:{SBIN:[.02184,.05094,.04421,.08986],UNIONBANK:[.03170,.06313,.05384,.09642]}, t:{SBIN:[.02287,.04723,.04033,.07789],UNIONBANK:[.04031,.07918,.06789,.12642]}}
+};
+const MEASURES = ["95% VaR","99% VaR","95% ES","99% ES"];
+const REG = {SBIN:{a:"0.000072",ap:"0.138",e:"0.777",ep:"1.7e-16",r2:"4.48%",rw:103,re:"0.000886",rr:"0.000896"},
+             UNIONBANK:{a:"0.000384",ap:"7.1e-7",e:"0.437",ep:"7.8e-7",r2:"1.63%",rw:31,re:"0.001879",rr:"0.001882"}};
+const SYMS = ["BANKBARODA","BANKINDIA","CANBK","CENTRALBK","INDIANB","IOB","MAHABANK","PNB","PSB","SBIN","UCOBANK","UNIONBANK"];
+const W = {
+  long:{
+    Sample:[0,.0328,0,0,.0437,0,.0344,.0195,0,.6796,.1654,.0247],
+    EWMA:[0,0,0,0,.0333,.0299,0,0,0,.9210,.0158,0],
+    "Ledoit-Wolf":[0,.0343,0,0,.0470,0,.0359,.0281,0,.6630,.1643,.0274],
+    OAS:[0,.0332,0,0,.0447,0,.0348,.0221,0,.6746,.1651,.0255]},
+  short:{
+    Sample:[-.0678,.0555,-.1490,-.0054,.0692,-.0277,.0551,.0969,-.0338,.7610,.1921,.0538],
+    EWMA:[.0262,-.0705,.0312,-.0237,.0896,.0525,-.0345,-.1310,-.1093,.9876,.1660,.0159],
+    "Ledoit-Wolf":[-.0561,.0551,-.1358,-.0042,.0702,-.0266,.0556,.0961,-.0320,.7339,.1896,.0542],
+    OAS:[-.0642,.0554,-.1450,-.0050,.0695,-.0274,.0552,.0967,-.0332,.7528,.1914,.0539]}
+};
+const WPERF = {long:{Sample:[.249377,.292640],EWMA:[.252531,.162235],"Ledoit-Wolf":[.250086,.292627],OAS:[.249588,.292574]},
+               short:{Sample:[.240650,.289463],EWMA:[.273148,.158585],"Ledoit-Wolf":[.242486,.289980],OAS:[.241208,.289563]}};
+const BETA = { // MKT, SMB, HML, MOM
+  BANKBARODA:[1.1079,.2282,.7519,-.0861],BANKINDIA:[1.0082,.6547,.8115,-.1386],CANBK:[1.3254,.3817,.6926,-.0958],
+  CENTRALBK:[.8602,.9042,.9758,.0694],INDIANB:[1.0281,.5947,.7674,-.1919],IOB:[.9385,.9127,.9705,.1147],
+  MAHABANK:[.8698,.9048,.9807,-.0371],PNB:[1.0211,.4020,.8464,-.1717],PSB:[1.0700,.7730,.9244,-.1090],
+  SBIN:[1.0458,-.0795,.4953,-.1965],UCOBANK:[.7885,.8489,.7356,-.0390],UNIONBANK:[1.0600,.6188,.7229,-.0065]};
+const CAPM = {BANKBARODA:[1.2696,1.3252],BANKINDIA:[1.0996,1.3798],CANBK:[1.4932,1.4741],CENTRALBK:[.7938,1.7624],INDIANB:[1.2434,1.0868],
+  IOB:[.9150,1.7641],MAHABANK:[.9016,1.5293],PNB:[1.0859,1.4756],PSB:[.9717,1.9287],SBIN:[1.2150,1.0106],UCOBANK:[.6528,1.5995],UNIONBANK:[1.1523,1.4152]};
+const DAILY = {BANKBARODA:[.001106,.024994],BANKINDIA:[.000915,.026821],CANBK:[.001261,.025649],CENTRALBK:[.000959,.030744],INDIANB:[.001858,.027236],
+  IOB:[.001283,.031976],MAHABANK:[.001533,.028808],PNB:[.000779,.024386],PSB:[.000685,.031102],SBIN:[.000966,.019562],UCOBANK:[.000763,.027968],UNIONBANK:[.001129,.026148]};
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const pct = (v,d=1) => (v*100).toFixed(d)+"%";
+const sgn = (v,d=1) => (v>=0?"+":"−")+Math.abs(v*100).toFixed(d)+"%";
+const lin = (d0,d1,r0,r1) => v => r0 + (v-d0)/(d1-d0)*(r1-r0);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDate = s => { const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); };
+function ticks(lo,hi,n=5){const span=hi-lo, step0=span/n, mag=10**Math.floor(Math.log10(step0)), r=step0/mag;
+  const step=(r>=5?10:r>=2?5:r>=1?2:1)*mag; const out=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step) out.push(+v.toFixed(10)); return out;}
+function hex2rgb(h){h=h.replace("#","");if(h.length===3)h=h.split("").map(c=>c+c).join("");return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}
+function mix(a,b,t){const A=hex2rgb(a),B=hex2rgb(b);return "rgb("+A.map((x,i)=>Math.round(x+(B[i]-x)*t)).join(",")+")";}
+function lum(rgb){const m=rgb.match(/\d+/g).map(Number).map(v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4});return .2126*m[0]+.7152*m[1]+.0722*m[2];}
+function seg(el, opts, cur, onPick){
+  el.innerHTML = opts.map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${l}</button>`).join("");
+  el.addEventListener("click", e=>{const b=e.target.closest("button"); if(!b) return;
+    el.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", x===b)); onPick(b.dataset.k);});
+}
+function tipHTML(head, rows){return `<div class="h">${esc(head)}</div>`+rows.map(([c,l,v])=>`<div class="r"><span>${c?`<i style="background:${c}"></i>`:""}${esc(l)}</span><b>${esc(v)}</b></div>`).join("");}
+function placeTip(tip, box, x, y){
+  tip.hidden=false; const w=tip.offsetWidth, h=tip.offsetHeight, bw=box.clientWidth;
+  let left = x+14; if(left+w>bw) left = x-w-14; if(left<0) left=Math.max(0,bw-w);
+  tip.style.left=left+"px"; tip.style.top=Math.max(0,y-h/2)+"px";
+}
+function mkChart(el, h){ el.innerHTML=""; const w=Math.max(300, el.clientWidth); const tip=document.createElement("div"); tip.className="tip"; tip.hidden=true; el.appendChild(tip); return {w,h,tip}; }
+
+// ---------- hero tape ----------
+(function(){
+  const best = SYMS.reduce((a,b)=>D.total[a]>D.total[b]?a:b), worst = SYMS.reduce((a,b)=>D.total[a]<D.total[b]?a:b);
+  const sorted=[...SYMS].map(s=>D.total[s]).sort((a,b)=>a-b), med=(sorted[5]+sorted[6])/2;
+  $("#tape").innerHTML = [
+    [sgn(D.total[best],0), `${best}, best total return`],
+    [sgn(med,0), "Median bank, 6 years"],
+    [sgn(D.total[worst],0), `${worst}, weakest return`],
+    ["31.1%", "SBIN annualised volatility, sector low"]
+  ].map(([v,k])=>`<div><span class="v num">${v}</span><span class="k">${k}</span></div>`).join("");
+})();
+
+// ---------- §1 price chart ----------
+const SLOTS = ["--s1","--s2","--s3"];
+let hl = ["INDIANB","SBIN","PSB"]; // order = slot assignment
+const slotOf = s => hl.indexOf(s);
+function drawChips(){
+  $("#priceChips").innerHTML = SYMS.map(s=>{const i=slotOf(s);
+    return `<button type="button" class="chip" data-s="${s}" aria-pressed="${i>=0}" title="${esc(D.names[s])}"><i style="${i>=0?`background:var(${SLOTS[i]})`:""}"></i>${s}</button>`;}).join("");
+  $("#priceLegend").innerHTML = hl.map((s,i)=>`<span><i style="background:var(${SLOTS[i]})"></i>${esc(D.names[s])} <span class="mono">${sgn(D.total[s],0)}</span></span>`).join("")
+    + `<span><i style="background:var(--muted-line)"></i>Other constituents</span>`;
+}
+$("#priceChips").addEventListener("click", e=>{const b=e.target.closest(".chip"); if(!b) return; const s=b.dataset.s; const i=slotOf(s);
+  if(i>=0){ if(hl.length>1) hl[i]=null; } else { const free=hl.indexOf(null); if(free>=0) hl[free]=s; else if(hl.length<3) hl.push(s); else hl[2]=s; }
+  hl = hl.filter(x=>x!==null); drawChips(); drawPrices(); });
+function drawPrices(){
+  const el=$("#priceChart"); const {w,tip}=mkChart(el,0); const h=Math.round(Math.min(420, Math.max(260, w*.48)));
+  const m={l:44,r:56,t:10,b:26}; const P=D.prices, n=P.dates.length;
+  const yT=[50,100,200,400,800]; const ly=v=>Math.log(v);
+  const x=lin(0,n-1,m.l,w-m.r), y=lin(ly(40),ly(1000),h-m.b,m.t);
+  const path = vals => vals.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(ly(v)).toFixed(1)).join("");
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Rebased adjusted prices for 12 PSU banks, log scale">`;
+  s+=`<g class="grid">`+yT.map(v=>`<line x1="${m.l}" x2="${w-m.r}" y1="${y(ly(v))}" y2="${y(ly(v))}"/>`).join("")+`</g>`;
+  s+=yT.map(v=>`<text class="tick" x="${m.l-8}" y="${y(ly(v))+4}" text-anchor="end">${v}</text>`).join("");
+  for(let yr=2020; yr<=2025; yr++){ const i=P.dates.findIndex(d=>d>=`${yr}-01-01`); if(i<0) continue;
+    s+=`<text class="tick" x="${x(i)}" y="${h-6}" text-anchor="${yr===2020?"start":"middle"}">${yr}</text>`; }
+  s+=`<line class="baseline" x1="${m.l}" x2="${w-m.r}" y1="${y(ly(100))}" y2="${y(ly(100))}" stroke-dasharray="3 3"/>`;
+  SYMS.filter(k=>slotOf(k)<0).forEach(k=>{ s+=`<path d="${path(P[k])}" fill="none" stroke="var(--muted-line)" stroke-width="1.2"/>`; });
+  // end labels for highlighted, de-collided
+  const ends = hl.map((k,i)=>({k,i,y:y(ly(P[k][n-1]))})).sort((a,b)=>a.y-b.y);
+  for(let j=1;j<ends.length;j++) if(ends[j].y-ends[j-1].y<14) ends[j].y=ends[j-1].y+14;
+  hl.forEach((k,i)=>{ s+=`<path d="${path(P[k])}" fill="none" stroke="var(${SLOTS[i]})" stroke-width="2" stroke-linejoin="round"/>`;
+    s+=`<circle cx="${x(n-1)}" cy="${y(ly(P[k][n-1]))}" r="3.5" fill="var(${SLOTS[i]})" stroke="var(--sheet)" stroke-width="2"/>`; });
+  ends.forEach(e=>{ s+=`<text x="${x(n-1)+8}" y="${e.y+4}" style="fill:var(--ink);font-weight:500">${Math.round(P[e.k][n-1])}</text>`; });
+  s+=`<line id="pxCross" x1="0" x2="0" y1="${m.t}" y2="${h-m.b}" stroke="var(--ink-3)" stroke-width="1" visibility="hidden"/><g id="pxDots"></g>`;
+  s+=`<rect x="${m.l}" y="0" width="${w-m.l-m.r}" height="${h}" fill="transparent" id="pxHit"/></svg>`;
+  el.insertAdjacentHTML("beforeend", s);
+  const svg=el.querySelector("svg"), cross=svg.querySelector("#pxCross"), dots=svg.querySelector("#pxDots");
+  const move = ev => { const r=svg.getBoundingClientRect(); const sx=(ev.clientX-r.left)*w/r.width; let i=Math.round((sx-m.l)/(w-m.l-m.r)*(n-1)); i=Math.max(0,Math.min(n-1,i));
+    const cx=x(i); cross.setAttribute("x1",cx); cross.setAttribute("x2",cx); cross.setAttribute("visibility","visible");
+    dots.innerHTML = hl.map((k,j)=>`<circle cx="${cx}" cy="${y(ly(P[k][i]))}" r="4" fill="var(${SLOTS[j]})" stroke="var(--sheet)" stroke-width="2"/>`).join("");
+    const rows = hl.map((k,j)=>[css(SLOTS[j]),k,"₹"+P[k][i].toFixed(0)]).sort((a,b)=>parseFloat(b[2].slice(1))-parseFloat(a[2].slice(1)));
+    tip.innerHTML = tipHTML("Week of "+fmtDate(P.dates[i]), rows);
+    placeTip(tip, el, cx*r.width/w, (ev.clientY-r.top)); };
+  svg.addEventListener("pointermove", move); svg.addEventListener("pointerleave", ()=>{tip.hidden=true;cross.setAttribute("visibility","hidden");dots.innerHTML="";});
+}
+
+// ---------- §2 universe table ----------
+const uniCols = [
+  ["sym","Bank",null],["total","Total return",v=>sgn(v,0)],["cagr","CAGR",v=>sgn(v,1)],["vol","Ann. vol",v=>pct(v,1)],
+  ["mdd","Max drawdown",v=>sgn(v,0)],["mean","Mean daily",v=>pct(v,3)],["last","Last close",v=>"₹"+v.toFixed(2)]];
+const uniRows = SYMS.map(s=>({sym:s,name:D.names[s],total:D.total[s],cagr:(1+D.total[s])**(1/6)-1,vol:DAILY[s][1]*Math.sqrt(252),mdd:D.maxDD[s],mean:DAILY[s][0],last:D.lastPrice[s]}));
+let uniSort=["total",-1];
+function drawUni(){
+  const [k,dir]=uniSort; const rows=[...uniRows].sort((a,b)=>k==="sym"?a.sym.localeCompare(b.sym)*dir:(a[k]-b[k])*dir);
+  const maxT=Math.max(...uniRows.map(r=>r.total));
+  let h=`<thead><tr>`+uniCols.map(([c,l])=>`<th class="${c==="sym"?"":"num"}" aria-sort="${c===k?(dir<0?"descending":"ascending"):"none"}"><button type="button" data-c="${c}">${l}</button></th>`).join("")+`</tr></thead><tbody>`;
+  rows.forEach(r=>{ h+=`<tr><td><span class="tk">${r.sym}</span> <span class="nm">${esc(r.name)}</span></td>`;
+    uniCols.slice(1).forEach(([c,,f])=>{ let v=f(r[c]); let cls="num";
+      if(c==="total") v=`<span class="inbar"><i style="width:${Math.max(2,r.total/maxT*80)}px"></i>${v}</span>`;
+      if(c==="mdd") cls+=" dn";
+      h+=`<td class="${cls}">${v}</td>`; }); h+=`</tr>`; });
+  $("#uniTable").innerHTML=h+`</tbody>`;
+}
+$("#uniTable").addEventListener("click",e=>{const b=e.target.closest("button[data-c]"); if(!b) return; const c=b.dataset.c;
+  uniSort = uniSort[0]===c?[c,-uniSort[1]]:[c,c==="sym"?1:-1]; drawUni();});
+
+function heatCell(v, t, neg){ // t in [0,1]
+  const lo=css(neg?"--neg-lo":"--seq-lo"), hi=css(neg?"--neg":"--seq-hi"); const bg=mix(lo,hi,Math.max(0,Math.min(1,t)));
+  return `background:${bg};color:${lum(bg)>.3?"#2c2a1f":"#fbf7ee"}`;
+}
+function drawCorr(){
+  const C=D.corr; const short=s=>s.replace("BANK","B").slice(0,6);
+  let h=`<thead><tr><th></th>`+SYMS.map(s=>`<th title="${s}">${short(s)}</th>`).join("")+`</tr></thead><tbody>`;
+  SYMS.forEach((s,i)=>{ h+=`<tr><th class="rowh">${s}</th>`+SYMS.map((t,j)=>{ const v=C[i][j];
+    return i===j?`<td class="c" style="color:var(--ink-3)">·</td>`:`<td class="c" style="${heatCell(v,(v-.3)/.55)}" title="${s} × ${t}: ${v.toFixed(2)}">${v.toFixed(2).slice(1)}</td>`;}).join("")+`</tr>`; });
+  $("#corrTable").innerHTML=h+`</tbody>`;
+}
+function drawYears(){
+  const yrs=Object.keys(D.yearly);
+  let h=`<thead><tr><th></th>`+yrs.map(y=>`<th>${y}</th>`).join("")+`</tr></thead><tbody>`;
+  SYMS.forEach(s=>{ h+=`<tr><th class="rowh">${s}</th>`+yrs.map(y=>{const v=D.yearly[y][s];
+    return `<td class="c" style="${v>=0?heatCell(v,v/1.2):heatCell(-v,-v/0.6,true)}">${(v>=0?"+":"−")+Math.abs(Math.round(v*100))}</td>`;}).join("")+`</tr>`; });
+  $("#yearTable").innerHTML=h+`</tbody>`;
+}
+
+// ---------- §3 risk ----------
+let rPeriod="full", rMethod="hist";
+seg($("#riskPeriod"), Object.entries(RISK).map(([k,v])=>[k,v.label]), rPeriod, k=>{rPeriod=k;drawRisk();});
+seg($("#riskMethod"), [["hist","Historical"],["t","Fitted t"]], rMethod, k=>{rMethod=k;drawRisk();});
+function drawRisk(){
+  const el=$("#riskChart"); const {w,tip}=mkChart(el); const h=280, m={l:44,r:8,t:18,b:30};
+  const data=RISK[rPeriod][rMethod]; const ymax=.14; const y=lin(0,ymax,h-m.b,m.t);
+  const gw=(w-m.l-m.r)/4, bw=Math.min(34,gw*.3), gap=2;
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="VaR and ES bars">`;
+  s+=`<g class="grid">`+ticks(0,ymax,4).map(v=>`<line x1="${m.l}" x2="${w-m.r}" y1="${y(v)}" y2="${y(v)}"/>`).join("")+`</g>`;
+  s+=ticks(0,ymax,4).map(v=>`<text class="tick" x="${m.l-8}" y="${y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join("");
+  MEASURES.forEach((lab,g)=>{ const cx=m.l+gw*g+gw/2;
+    ["SBIN","UNIONBANK"].forEach((k,j)=>{ const v=data[k][g]; const x0=j===0?cx-bw-gap/2:cx+gap/2; const y0=y(v), hh=y(0)-y0, r=Math.min(4,hh);
+      s+=`<path d="M${x0},${y(0)}V${y0+r}Q${x0},${y0} ${x0+r},${y0}H${x0+bw-r}Q${x0+bw},${y0} ${x0+bw},${y0+r}V${y(0)}Z" fill="var(${j?"--s2":"--s1"})" data-g="${g}" data-k="${k}" class="rb"/>`;
+      s+=`<text x="${x0+bw/2}" y="${y0-5}" text-anchor="middle" style="fill:var(--ink);font-size:10px">${(v*100).toFixed(1)}</text>`; });
+    s+=`<text x="${cx}" y="${h-8}" text-anchor="middle" style="fill:var(--ink-2);font:500 11px var(--f-body)">${lab}</text>`;
+    s+=`<rect x="${m.l+gw*g}" y="${m.t}" width="${gw}" height="${h-m.t-m.b}" fill="transparent" class="rh" data-g="${g}"/>`; });
+  s+=`<line class="baseline" x1="${m.l}" x2="${w-m.r}" y1="${y(0)}" y2="${y(0)}"/></svg>`;
+  el.insertAdjacentHTML("beforeend",s);
+  $("#riskSub").textContent = `${RISK[rPeriod].label} · ${rMethod==="hist"?"historical (empirical quantile and tail mean)":"Student's t fitted by MLE"} · 1-day loss, %`;
+  el.querySelectorAll(".rh").forEach(r=>{ r.addEventListener("pointermove",ev=>{ const g=+r.dataset.g; const b=el.getBoundingClientRect();
+    tip.innerHTML=tipHTML(MEASURES[g]+" · "+RISK[rPeriod].label, [[css("--s1"),"SBIN",pct(data.SBIN[g],2)],[css("--s2"),"UNIONBANK",pct(data.UNIONBANK[g],2)],
+      [null,"Ratio",(data.UNIONBANK[g]/data.SBIN[g]).toFixed(2)+"×"]]); placeTip(tip,el,ev.clientX-b.left,ev.clientY-b.top); });
+    r.addEventListener("pointerleave",()=>tip.hidden=true); });
+}
+function drawRiskTable(){
+  let h=`<thead><tr><th>Period</th><th>Stock</th><th>Method</th>`+MEASURES.map(x=>`<th class="num">${x}</th>`).join("")+`</tr></thead><tbody>`;
+  Object.values(RISK).forEach(P=>["SBIN","UNIONBANK"].forEach(k=>[["hist","Historical"],["t","Fitted t"]].forEach(([mk,ml])=>{
+    h+=`<tr><td>${P.label}</td><td class="tk">${k}</td><td>${ml}</td>`+P[mk][k].map(v=>`<td class="num">${pct(v,2)}</td>`).join("")+`</tr>`; })));
+  $("#riskTable").innerHTML=h+`</tbody>`;
+}
+// histogram
+let hStock="SBIN";
+seg($("#histStock"), [["SBIN","SBIN"],["UNIONBANK","UNIONBANK"]], hStock, k=>{hStock=k;drawHist();});
+function lgamma(z){const g=7,c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(z<.5) return Math.log(Math.PI/Math.sin(Math.PI*z))-lgamma(1-z); z-=1; let a=c[0]; const t=z+g+.5; for(let i=1;i<9;i++) a+=c[i]/(z+i); return .5*Math.log(2*Math.PI)+(z+.5)*Math.log(t)-t+Math.log(a);}
+function tpdf(x,df,loc,sc){const z=(x-loc)/sc; return Math.exp(lgamma((df+1)/2)-lgamma(df/2)-.5*Math.log(df*Math.PI)-((df+1)/2)*Math.log(1+z*z/df))/sc;}
+function drawHist(){
+  const H=D.hist[hStock]; const el=$("#histChart"); const {w,tip}=mkChart(el); const h=260, m={l:12,r:12,t:16,b:28};
+  const lo=-.12, hi=.12; const x=lin(lo,hi,m.l,w-m.r); const bw=H.edges[1]-H.edges[0];
+  const dens=H.counts.map(c=>c/(H.n*bw)); const ymax=Math.max(...dens)*1.08; const y=lin(0,ymax,h-m.b,m.t);
+  const col=hStock==="SBIN"?"--s1":"--s2"; const v95=RISK.full.hist[hStock][0], v99=RISK.full.hist[hStock][1];
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Return histogram">`;
+  H.counts.forEach((c,i)=>{ const a=H.edges[i], b=H.edges[i+1]; if(b<lo||a>hi||!c) return; const x0=x(Math.max(a,lo))+1, x1=x(Math.min(b,hi))-1; if(x1<=x0) return;
+    const tail=b<=-v95+1e-9; s+=`<rect x="${x0}" y="${y(dens[i])}" width="${x1-x0}" height="${y(0)-y(dens[i])}" fill="var(${tail?col:"--muted-line"})" rx="1"/>`; });
+  let d=""; for(let k=0;k<=160;k++){const xv=lo+(hi-lo)*k/160; d+=(k?"L":"M")+x(xv).toFixed(1)+","+y(Math.min(ymax,tpdf(xv,H.t.df,H.t.loc,H.t.scale))).toFixed(1);}
+  s+=`<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
+  [[v95,"95%"],[v99,"99%"]].forEach(([v,l],i)=>{ s+=`<line x1="${x(-v)}" x2="${x(-v)}" y1="${m.t+(i?26:0)}" y2="${y(0)}" stroke="var(--ink)" stroke-dasharray="3 3"/>`;
+    s+=`<text x="${x(-v)-4}" y="${m.t+10+(i?26:0)}" text-anchor="end" style="fill:var(--ink)">${l} VaR −${(v*100).toFixed(1)}%</text>`; });
+  [-.1,-.05,0,.05,.1].forEach(v=>{ s+=`<text class="tick" x="${x(v)}" y="${h-8}" text-anchor="middle">${v>0?"+":""}${Math.round(v*100)}%</text>`; });
+  s+=`<line class="baseline" x1="${m.l}" x2="${w-m.r}" y1="${y(0)}" y2="${y(0)}"/>`;
+  s+=`<rect x="0" y="0" width="${w}" height="${h}" fill="transparent" id="hHit"/></svg>`;
+  el.insertAdjacentHTML("beforeend",s);
+  const svg=el.querySelector("svg");
+  svg.addEventListener("pointermove",ev=>{const r=svg.getBoundingClientRect(); const xv=lo+((ev.clientX-r.left)*w/r.width-m.l)/(w-m.l-m.r)*(hi-lo);
+    const i=H.edges.findIndex((e,k)=>xv>=e&&xv<H.edges[k+1]); if(i<0||xv<lo||xv>hi){tip.hidden=true;return;}
+    tip.innerHTML=tipHTML(`${(H.edges[i]*100).toFixed(1)}% to ${(H.edges[i+1]*100).toFixed(1)}%`,[[null,"Trading days",String(H.counts[i])],[null,"Share of sample",pct(H.counts[i]/H.n,1)]]);
+    placeTip(tip,el,ev.clientX-r.left,ev.clientY-r.top);});
+  svg.addEventListener("pointerleave",()=>tip.hidden=true);
+  const worst = H.edges[H.counts.findIndex(c=>c>0)];
+  $("#histKv").innerHTML=[["ν = "+H.t.df.toFixed(2),"Fitted t degrees of freedom"],[pct(H.sd,2),"Daily standard deviation"],["≤ "+(worst*100).toFixed(0)+"%","Worst daily bin"]]
+    .map(([v,k])=>`<div><span class="v">${v}</span><span class="k">${k}</span></div>`).join("");
+}
+
+// ---------- §4 stress ----------
+function drawStress(){
+  const el=$("#stressChart"); const {w,tip}=mkChart(el); const h=260, m={l:70,r:56,t:8,b:24};
+  const rows=MEASURES.map((lab,g)=>({lab,v:["SBIN","UNIONBANK"].map(k=>RISK.stress.hist[k][g]/RISK.p2.hist[k][g]-1),
+    a:["SBIN","UNIONBANK"].map(k=>[RISK.p2.hist[k][g],RISK.stress.hist[k][g]])}));
+  const xmax=.7; const x=lin(0,xmax,m.l,w-m.r); const rh=(h-m.t-m.b)/4, bh=Math.min(16,rh*.32);
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Percent change in risk measures after adding March 2020">`;
+  s+=`<g class="grid">`+[0,.2,.4,.6].map(v=>`<line x1="${x(v)}" x2="${x(v)}" y1="${m.t}" y2="${h-m.b}"/>`).join("")+`</g>`;
+  s+=[0,.2,.4,.6].map(v=>`<text class="tick" x="${x(v)}" y="${h-6}" text-anchor="middle">+${v*100}%</text>`).join("");
+  rows.forEach((r,i)=>{ const cy=m.t+rh*i+rh/2;
+    s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" style="fill:var(--ink-2);font:500 11px var(--f-body)">${r.lab}</text>`;
+    r.v.forEach((v,j)=>{ const y0=j?cy+1:cy-bh-1; const x1=x(v);
+      s+=`<path d="M${x(0)},${y0}H${x1-3}Q${x1},${y0} ${x1},${y0+3}V${y0+bh-3}Q${x1},${y0+bh} ${x1-3},${y0+bh}H${x(0)}Z" fill="var(${j?"--s2":"--s1"})"/>`;
+      s+=`<text x="${x1+6}" y="${y0+bh-4}" style="fill:var(--ink);font-size:10.5px">+${Math.round(v*100)}%</text>`; });
+    s+=`<rect x="0" y="${m.t+rh*i}" width="${w}" height="${rh}" fill="transparent" class="sh" data-i="${i}"/>`; });
+  s+=`<line class="baseline" x1="${x(0)}" x2="${x(0)}" y1="${m.t}" y2="${h-m.b}"/></svg>`;
+  el.insertAdjacentHTML("beforeend",s);
+  el.querySelectorAll(".sh").forEach(r=>{ r.addEventListener("pointermove",ev=>{const i=+r.dataset.i, R=rows[i], b=el.getBoundingClientRect();
+    tip.innerHTML=tipHTML(R.lab+", historical",[[css("--s1"),"SBIN",`${pct(R.a[0][0],2)} → ${pct(R.a[0][1],2)}`],[css("--s2"),"UNIONBANK",`${pct(R.a[1][0],2)} → ${pct(R.a[1][1],2)}`]]);
+    placeTip(tip,el,ev.clientX-b.left,ev.clientY-b.top);}); r.addEventListener("pointerleave",()=>tip.hidden=true); });
+}
+
+// ---------- §5 volatility ----------
+let vStock="SBIN";
+seg($("#volStock"), [["SBIN","SBIN"],["UNIONBANK","UNIONBANK"]], vStock, k=>{vStock=k;drawVol();});
+function drawVol(){
+  const V=D.ewma[vStock], lam=D.lambda[vStock], hl_=Math.log(.5)/Math.log(lam); const col=vStock==="SBIN"?"--s1":"--s2";
+  $("#volSub").textContent=`${vStock} · λ = ${lam.toFixed(4)} · half-life ${hl_.toFixed(1)} days · rolling window ${V.window} days · weekly samples`;
+  $("#volLegend").innerHTML=`<span><i style="background:var(${col})"></i>EWMA (t errors, MLE λ)</span><span><i class="dash"></i>Rolling ${V.window}-day</span>`;
+  const el=$("#volChart"); const {w,tip}=mkChart(el); const h=Math.round(Math.min(340,Math.max(240,w*.32))), m={l:44,r:12,t:10,b:26};
+  const n=V.dates.length; const vals=V.ewma.concat(V.roll).filter(v=>v!=null); const ymax=Math.ceil(Math.max(...vals)*10)/10;
+  const x=lin(0,n-1,m.l,w-m.r), y=lin(0,ymax,h-m.b,m.t);
+  const path=a=>{let d="",pen=false;a.forEach((v,i)=>{if(v==null){pen=false;return;} d+=(pen?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1); pen=true;}); return d;};
+  const yt=ticks(0,ymax,5);
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="EWMA and rolling volatility">`;
+  s+=`<g class="grid">`+yt.map(v=>`<line x1="${m.l}" x2="${w-m.r}" y1="${y(v)}" y2="${y(v)}"/>`).join("")+`</g>`;
+  s+=yt.map(v=>`<text class="tick" x="${m.l-8}" y="${y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join("");
+  for(let yr=2020;yr<=2025;yr++){const i=V.dates.findIndex(d=>d>=`${yr}-01-01`); if(i>=0) s+=`<text class="tick" x="${x(i)}" y="${h-6}" text-anchor="${yr===2020?"start":"middle"}">${yr}</text>`;}
+  const area = path(V.ewma)+`L${x(n-1)},${y(0)}L${x(0)},${y(0)}Z`;
+  s+=`<path d="${area}" fill="var(${col})" fill-opacity=".10"/>`;
+  s+=`<path d="${path(V.roll)}" fill="none" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  s+=`<path d="${path(V.ewma)}" fill="none" stroke="var(${col})" stroke-width="2"/>`;
+  s+=`<line class="baseline" x1="${m.l}" x2="${w-m.r}" y1="${y(0)}" y2="${y(0)}"/>`;
+  s+=`<line id="vCross" y1="${m.t}" y2="${h-m.b}" stroke="var(--ink-3)" visibility="hidden"/><g id="vDots"></g><rect x="${m.l}" width="${w-m.l-m.r}" height="${h}" fill="transparent"/></svg>`;
+  el.insertAdjacentHTML("beforeend",s);
+  const svg=el.querySelector("svg"), cross=svg.querySelector("#vCross"), dots=svg.querySelector("#vDots");
+  svg.addEventListener("pointermove",ev=>{const r=svg.getBoundingClientRect(); let i=Math.round(((ev.clientX-r.left)*w/r.width-m.l)/(w-m.l-m.r)*(n-1)); i=Math.max(0,Math.min(n-1,i));
+    cross.setAttribute("x1",x(i));cross.setAttribute("x2",x(i));cross.setAttribute("visibility","visible");
+    dots.innerHTML=(V.ewma[i]!=null?`<circle cx="${x(i)}" cy="${y(V.ewma[i])}" r="4" fill="var(${col})" stroke="var(--sheet)" stroke-width="2"/>`:"")+(V.roll[i]!=null?`<circle cx="${x(i)}" cy="${y(V.roll[i])}" r="4" fill="var(--ink-3)" stroke="var(--sheet)" stroke-width="2"/>`:"");
+    tip.innerHTML=tipHTML("Week of "+fmtDate(V.dates[i]),[[css(col),"EWMA",V.ewma[i]!=null?pct(V.ewma[i]):"–"],[css("--ink-3"),`Rolling ${V.window}d`,V.roll[i]!=null?pct(V.roll[i]):"warming up"]]);
+    placeTip(tip,el,x(i)*r.width/w,ev.clientY-r.top);});
+  svg.addEventListener("pointerleave",()=>{tip.hidden=true;cross.setAttribute("visibility","hidden");dots.innerHTML="";});
+}
+function drawReg(){
+  const rows=[["λ (MLE)",D.lambda.SBIN.toFixed(4),D.lambda.UNIONBANK.toFixed(4)],["α intercept",REG.SBIN.a+" <span class='nm'>p "+REG.SBIN.ap+"</span>",REG.UNIONBANK.a+" <span class='nm'>p "+REG.UNIONBANK.ap+"</span>"],
+    ["η slope",REG.SBIN.e+" <span class='nm'>p "+REG.SBIN.ep+"</span>",REG.UNIONBANK.e+" <span class='nm'>p "+REG.UNIONBANK.ep+"</span>"],["R²",REG.SBIN.r2,REG.UNIONBANK.r2],
+    ["RMSE, EWMA",REG.SBIN.re,REG.UNIONBANK.re],["RMSE, rolling",REG.SBIN.rr+` <span class='nm'>${REG.SBIN.rw}d</span>`,REG.UNIONBANK.rr+` <span class='nm'>${REG.UNIONBANK.rw}d</span>`]];
+  $("#regTable").innerHTML=`<thead><tr><th></th><th class="num">SBIN</th><th class="num">UNIONBANK</th></tr></thead><tbody>`+rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")+`</tbody>`;
+}
+
+// ---------- §6 portfolio ----------
+function drawFront(){
+  const el=$("#frontChart"); const {w,tip}=mkChart(el); const h=Math.round(Math.min(360,Math.max(260,w*.72))), m={l:44,r:14,t:12,b:34};
+  const F=D.frontier, A=D.assets; const x=lin(.27,.53,m.l,w-m.r), y=lin(.15,.5,h-m.b,m.t);
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Efficient frontier">`;
+  const xt=[.3,.35,.4,.45,.5], yt=[.2,.3,.4,.5];
+  s+=`<g class="grid">`+yt.map(v=>`<line x1="${m.l}" x2="${w-m.r}" y1="${y(v)}" y2="${y(v)}"/>`).join("")+`</g>`;
+  s+=yt.map(v=>`<text class="tick" x="${m.l-8}" y="${y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join("");
+  s+=xt.map(v=>`<text class="tick" x="${x(v)}" y="${h-18}" text-anchor="middle">${Math.round(v*100)}%</text>`).join("");
+  s+=`<text x="${(m.l+w-m.r)/2}" y="${h-3}" text-anchor="middle" style="fill:var(--ink-3)">annualised volatility →</text>`;
+  s+=`<text x="${m.l+4}" y="${m.t+10}" style="fill:var(--ink-3)">↑ expected return</text>`;
+  s+=`<path d="${F.map((p,i)=>(i?"L":"M")+x(p.vol).toFixed(1)+","+y(p.ret).toFixed(1)).join("")}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
+  A.forEach(a=>{ s+=`<circle cx="${x(a.vol)}" cy="${y(a.ret)}" r="4.5" fill="var(--ink-3)" stroke="var(--sheet)" stroke-width="2"/>`;
+    const anchor = x(a.vol)>w-90?"end":"start"; s+=`<text x="${x(a.vol)+(anchor==="end"?-8:8)}" y="${y(a.ret)+4}" text-anchor="${anchor}" style="font-size:10px">${a.sym}</text>`; });
+  const p0=F[0]; s+=`<circle cx="${x(p0.vol)}" cy="${y(p0.ret)}" r="6" fill="var(--s2)" stroke="var(--sheet)" stroke-width="2"/>`;
+  s+=`<text x="${x(p0.vol)+10}" y="${y(p0.ret)+16}" style="fill:var(--ink);font-size:10.5px">Min variance ${pct(p0.vol)} / ${pct(p0.ret)}</text>`;
+  s+=`<circle id="fDot" r="5" fill="var(--accent)" stroke="var(--sheet)" stroke-width="2" visibility="hidden"/>`;
+  s+=`<rect x="${m.l}" y="${m.t}" width="${w-m.l-m.r}" height="${h-m.t-m.b}" fill="transparent"/></svg>`;
+  el.insertAdjacentHTML("beforeend",s);
+  const svg=el.querySelector("svg"), dot=svg.querySelector("#fDot");
+  svg.addEventListener("pointermove",ev=>{const r=svg.getBoundingClientRect(); const px=(ev.clientX-r.left)*w/r.width, py=(ev.clientY-r.top)*h/r.height;
+    let best=0,bd=1e9; F.forEach((p,i)=>{const d=(x(p.vol)-px)**2+(y(p.ret)-py)**2; if(d<bd){bd=d;best=i;}});
+    if(bd>40*40){tip.hidden=true;dot.setAttribute("visibility","hidden");return;}
+    const p=F[best]; dot.setAttribute("cx",x(p.vol));dot.setAttribute("cy",y(p.ret));dot.setAttribute("visibility","visible");
+    const ws=Object.entries(p.w).sort((a,b)=>b[1]-a[1]);
+    tip.innerHTML=tipHTML(`Return ${pct(p.ret)} · Vol ${pct(p.vol)}`, ws.map(([k,v])=>[null,k,pct(v,1)]));
+    placeTip(tip,el,x(p.vol)*r.width/w,y(p.ret)*r.height/h);});
+  svg.addEventListener("pointerleave",()=>{tip.hidden=true;dot.setAttribute("visibility","hidden");});
+}
+let wCov="Sample", wMode="long";
+seg($("#wCov"), Object.keys(W.long).map(k=>[k,k]), wCov, k=>{wCov=k;drawW();});
+seg($("#wShort"), [["long","Long only"],["short","Shorts allowed"]], wMode, k=>{wMode=k;drawW();});
+function drawW(){
+  const ws=W[wMode][wCov]; const lo=-.2, hi=1; const sc=v=>(v-lo)/(hi-lo)*100;
+  $("#wList").innerHTML = SYMS.map((s,i)=>{const v=ws[i]; const a=Math.min(sc(0),sc(v)), b=Math.abs(sc(v)-sc(0));
+    return `<div class="wrow"><span class="tk">${s}</span><span class="bar"><span class="zero" style="left:${sc(0)}%"></span><b style="left:${a}%;width:${Math.max(v?0.6:0,b)}%;background:var(${v<0?"--neg":s==="SBIN"?"--s1":"--s1"});opacity:${s==="SBIN"||v<0?1:.6}"></b></span><span class="val num ${v<0?"dn":""}">${v===0?"–":(v<0?"−":"")+Math.abs(v*100).toFixed(1)+"%"}</span></div>`;}).join("");
+  const [r,vol]=WPERF[wMode][wCov]; const zeros=ws.filter(v=>v===0).length, shorts=ws.filter(v=>v<0).length;
+  $("#wSub").textContent = `${wCov} covariance · ${wMode==="long"?"weights between 0 and 100%":"unbounded weights"}`;
+  $("#wKv").innerHTML=[[pct(vol,2),"Annual volatility"],[pct(r,1),"Expected return"],[wMode==="long"?zeros+" of 12":shorts+" of 12",wMode==="long"?"Banks at zero weight":"Banks held short"]]
+    .map(([v,k])=>`<div><span class="v">${v}</span><span class="k">${k}</span></div>`).join("");
+}
+
+// ---------- §7 factors ----------
+function drawBeta(){
+  const H=["Market","Size","Value","Momentum"];
+  let h=`<thead><tr><th></th>`+H.map(x=>`<th>${x}</th>`).join("")+`</tr></thead><tbody>`;
+  SYMS.forEach(s=>{ h+=`<tr><th class="rowh">${s}</th>`+BETA[s].map(v=>`<td class="c" style="${v>=0?heatCell(v,v/1.35):heatCell(-v,-v/.5,true)}">${(v<0?"−":"")+Math.abs(v).toFixed(2)}</td>`).join("")+`</tr>`; });
+  $("#betaTable").innerHTML=h+`</tbody>`;
+}
+function drawCapm(){
+  const el=$("#capmChart"); const {w,tip}=mkChart(el); const rows=Object.entries(CAPM).map(([k,[a,b]])=>({k,a,b,d:b-a})).sort((p,q)=>q.d-p.d);
+  const rh=26, m={l:92,r:52,t:8,b:26}, h=m.t+m.b+rh*rows.length; const x=lin(.5,2,m.l,w-m.r);
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="CAPM beta change by bank">`;
+  const xt=[.5,1,1.5,2];
+  s+=`<g class="grid">`+xt.map(v=>`<line x1="${x(v)}" x2="${x(v)}" y1="${m.t}" y2="${h-m.b}"/>`).join("")+`</g>`;
+  s+=`<line x1="${x(1)}" x2="${x(1)}" y1="${m.t}" y2="${h-m.b}" class="baseline"/>`;
+  s+=xt.map(v=>`<text class="tick" x="${x(v)}" y="${h-8}" text-anchor="middle">${v.toFixed(1)}</text>`).join("");
+  rows.forEach((r,i)=>{ const cy=m.t+rh*i+rh/2;
+    s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" style="font-size:10.5px">${r.k}</text>`;
+    s+=`<line x1="${x(r.a)}" x2="${x(r.b)}" y1="${cy}" y2="${cy}" stroke="var(--axis)" stroke-width="2"/>`;
+    s+=`<circle cx="${x(r.a)}" cy="${cy}" r="4.5" fill="var(--ink-3)" stroke="var(--sheet)" stroke-width="2"/>`;
+    s+=`<circle cx="${x(r.b)}" cy="${cy}" r="5" fill="var(--s1)" stroke="var(--sheet)" stroke-width="2"/>`;
+    s+=`<text x="${w-m.r+8}" y="${cy+4}" style="fill:var(${r.d>=0?"--ink":"--ink-2"});font-size:10.5px">${r.d>=0?"+":"−"}${Math.abs(r.d).toFixed(2)}</text>`;
+    s+=`<rect x="0" y="${cy-rh/2}" width="${w}" height="${rh}" fill="transparent" class="ch_" data-i="${i}"/>`; });
+  s+=`</svg>`; el.insertAdjacentHTML("beforeend",s);
+  el.querySelectorAll(".ch_").forEach(rc=>{ rc.addEventListener("pointermove",ev=>{const r=rows[+rc.dataset.i], b=el.getBoundingClientRect();
+    tip.innerHTML=tipHTML(D.names[r.k],[[css("--ink-3"),"β 2020–22",r.a.toFixed(3)],[css("--s1"),"β 2023–25",r.b.toFixed(3)],[null,"Change",(r.d>=0?"+":"−")+Math.abs(r.d).toFixed(3)]]);
+    placeTip(tip,el,ev.clientX-b.left,ev.clientY-b.top);}); rc.addEventListener("pointerleave",()=>tip.hidden=true); });
+}
+
+// ---------- boot ----------
+function drawCharts(){ drawPrices(); drawRisk(); drawHist(); drawStress(); drawVol(); drawFront(); drawCapm(); }
+function drawThemed(){ drawCorr(); drawYears(); drawBeta(); }
+drawChips(); drawUni(); drawRiskTable(); drawReg(); drawW(); drawThemed(); drawCharts();
+let rz; new ResizeObserver(()=>{clearTimeout(rz); rz=setTimeout(drawCharts,120);}).observe(document.querySelector("main"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{drawThemed();drawCharts();});
+new MutationObserver(()=>{drawThemed();drawCharts();}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+// section index highlight
+const links=[...document.querySelectorAll(".index a")];
+const io=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ links.forEach(a=>a.classList.toggle("on",a.getAttribute("href")==="#"+e.target.id)); } }),{rootMargin:"-40% 0px -55% 0px"});
+document.querySelectorAll("section.ch").forEach(s=>io.observe(s));
+</script>
